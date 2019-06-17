@@ -77,6 +77,8 @@ def cities_states(addresses):
                 city = chunks[1].rstrip('.')
                 state = '' # ! Note to self: Come back to this
                 # When state is excluded, it's usually Massachusetts
+                if 'New York C' in city:
+                    state = 'N Y'
             else:
                 city = chunks[0]
                 state = chunks[1]
@@ -121,18 +123,27 @@ def census_age(years, ages, delta_year=3):
         year_diffs.append(year_difference)
         census_years.append(year - year_difference) # Rounds down to nearest 10
         if pd.notna(age):
-            age = int(re.sub('\D', '', age))
+            if type(age) is str:
+                age = int(re.sub('\D', '', age))
             est_ages.append(age - year_difference)
         else:
             est_ages.append(age)
     return census_years, year_diffs, est_ages
 
         
-def format_doc(filename):
-    '''Imports a CSV of red book data and puts it in a format that will be used
+def format_doc(data):
+    '''Imports red book data and puts it in a format that will be used
     for matching.
+    
+    data is either a filename of a CSV containing the data, or a Pandas
+     DataFrame containing the data
     '''
-    df = pd.read_csv(filename, usecols=['Year', 'Name', 'Age', 'Home Address'])
+    # If data is a filename for a CSV, import it to a Pandas DataFrame
+    if type(data) is str:
+        df = pd.read_csv(data,
+                         usecols=['Year', 'Name', 'Age', 'Home Address'])
+    else:
+        df = data[['Year', 'Name', 'Age', 'Home Address']]
     # Split name column into first & last names
     surname, given_name = last_first_names(df['Name'])
     # Try to get city & state from Home Address column
@@ -140,13 +151,17 @@ def format_doc(filename):
     # Figure out closest census year and age in that year
     # Also determine years since most recent census
     census_year, years_since_census, age = census_age(df['Year'], df['Age'])
-    return pd.DataFrame({'surname': surname,
-                         'given_name': given_name,
-                         'city': city,
-                         'state': state,
-                         'census_year': census_year,
-                         'years_since_census': years_since_census,
-                         'est_age': age})
+    return pd.DataFrame(
+             {
+                 'surname': surname,
+                 'given_name': given_name,
+                 'city': city,
+                 'state': state,
+                 'census_year': census_year,
+                 'years_since_census': years_since_census,
+                 'est_age': age
+             },
+             index=df.index)
     
 
 
