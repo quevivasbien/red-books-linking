@@ -17,6 +17,7 @@ from sklearn.ensemble import RandomForestClassifier
 from joblib import dump, load
 
 STATE_FILES = 'R:/JoePriceResearch/record_linking/data/census_1920/data/state_files/'
+CROSSWALK_DIR = 'R:/JoePriceResearch/record_linking/data/crosswalks/'
 COLUMNS = ['ark1920', 'event_township', 'pr_age', 'pr_name_gn', 'pr_name_surn']
 
 
@@ -43,7 +44,10 @@ def last_first_names(names):
                 # If there's a middle name, just take its first initial
                 given_names.append('{} {}'.format(gn[0], gn[1][0]))
             else:
-                given_names.append(gn[0])
+                try:
+                    given_names.append(gn[0])
+                except IndexError: # if gn is empty
+                    given_names.append('')
         else:
             surnames.append(name)
             given_names.append('')
@@ -173,7 +177,7 @@ def import_census(filename):
     '''
     # Import in chunks of 500000 at a time so we don't eat up all the memory
     reader = pd.read_stata(STATE_FILES + filename, chunksize=500000,
-                           columns=COLUMNS)
+                           columns=COLUMNS, index_col='ark1920')
     df = pd.DataFrame()
     for chunk in reader:
         print('Read chunk from {}...'.format(filename))
@@ -308,4 +312,6 @@ def get_likely_matches(features, just_indices=False):
         return list(positive_results.index)
     else:
         return positive_results.confidence
+
+
     

@@ -18,10 +18,20 @@ STATE_EQUIVS = 'state_equivs.json'
 MASTER_DATA = 'master_data.csv'
 
 def process_blurb(blurb, filename):
+    '''Takes the OCR'd text from one red book entry and uses regex to extract
+    identifiers from it.
+     
+    blurb is a string that is the OCR'd text.
+    filename is a string that is the name of the file the text came from.
+    '''
     record = {}
-    filename_parse = re.search(r'^DSC_(\d{4})_(\d)\.txt$', filename)
-    record['Picture'] = int(filename_parse.group(1))
-    record['Entry'] = int(filename_parse.group(2))
+    filename_parse = re.search(r'^DSC_(\d{4})_(\d{1,2})\.txt$', filename)
+    try:
+        record['Picture'] = int(filename_parse.group(1))
+        record['Entry'] = int(filename_parse.group(2))
+    except AttributeError:
+        print(filename)
+        raise
     name_search = re.search(r'(?:^|\n)([^,]+,[^,]+?(?:, J\S)?)(?:\.|, Age)', blurb)
     if name_search:
         record['Name'] = name_search.group(1)
@@ -49,6 +59,14 @@ def process_blurb(blurb, filename):
     return record
 
 def get_red_book_data(folder_path, year):
+    '''Creates a pandas DataFrame with data from OCR'd red book entries.
+     
+    folder_path is the location of the folder that contains the data you want
+     to process. This folder should contain a bunch of .txt files, each one
+     containing a single record, and their filenames should be formatted like
+     DSC_####_#.txt.
+    year is the graduating year of the people in the redbooks you're processing
+    '''
     filenames = [f for f in os.listdir(folder_path) if f[:3] == 'DSC']
     records = []
     for f in filenames:
@@ -70,10 +88,12 @@ def add_data_to_master(data):
     with open(STATE_EQUIVS, 'r', encoding='utf-8') as fh:
         state_equivs = json.load(fh)
     states = []
-    for s in doc.state: # Lookup alias
+    for i, r in doc.iterrows():
+        s = r['state']
         state = state_equivs.get(s)
         if state is None:
-            state = input('State {} not recognized. Type the name of the state it corresponds to (all lowercase): '.format(s))
+            print('State "{}" not recognized. (City is {})'.format(s, r['city']))
+            state = input('Type the name of the state it corresponds to (all lowercase):\n')
             state_equivs[s] = state
         states.append(state)
     doc.state = states
@@ -83,11 +103,24 @@ def add_data_to_master(data):
     with open(MASTER_DATA, 'a', encoding='utf-8') as fh:
         doc.to_csv(fh, header=False)
 
+def get_and_add(folder_path, year):
+    '''Combines previous two functions together.
+    '''
+    df = get_red_book_data(folder_path, year)
+    add_data_to_master(df)
+
 def match_from_master(census_year, state, census_filename):
+    '''Finds matches from master data matching the given year and state
+    
+    state is either a string or list of strings
+    '''
+    if type(state) is str:
+        state = [state]
     # Select records with given year and state from master data
     # Master data should already be in correct format
     doc = pd.read_csv('master_data.csv', index_col=0)
-    doc = doc[(doc.census_year == census_year) & (doc.state == state)]
+    doc = doc[doc.census_year == census_year]
+    doc = pd.concat([doc[doc.state == s] for s in state])
     print('Importing census data from {}...'.format(census_filename))
     census = linking.import_census(census_filename)
     print('Building features for most likely matches...')
